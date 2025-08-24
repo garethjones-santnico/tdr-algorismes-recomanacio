@@ -1,0 +1,32 @@
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Matriu usuari-ítem: files - usuaris, columnes - ítems
+user_item_matrix = np.array([
+    [1, 0, 1, 0, 0, 1, 1],
+    [0, 1, 1, 0, 0, 0, 0],
+    [1, 0, 0, 1, 1, 1, 1],
+    [0, 0, 1, 0, 1, 1, 0]
+])
+
+# Calcular similitud entre ítems
+item_similarity = cosine_similarity(user_item_matrix.T)
+
+# Crear un usuari d'exemple
+user_interactions = np.array([1, 0, 0, 0, 1, 0, 0])
+
+# Calcular la probabilitat que l'usuari d'exemple interactuï amb cada ítem
+item_scores = user_interactions.dot(item_similarity)
+print(item_scores)
+
+# Eliminar els ítems amb què ja ha interactuat l'usuari (per no recomanar-los)
+item_scores = np.where(user_interactions == 1, -np.inf, item_scores)
+
+# Classificar els ítems per valoració i recomanar els 3 primers
+n = 3
+recommended_items = np.argsort(item_scores)[::-1][:n]
+
+# Imprimir resultats
+print("Ítems recomanats:")
+for item in recommended_items:
+    print(f"Ítem {item + 1}")
