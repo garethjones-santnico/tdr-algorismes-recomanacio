@@ -1,0 +1,79 @@
+# PREPARAR DADES
+import pandas as pd 
+
+    # Llegir la llista de pel·lícules i desar-ho a df (dataframe)
+df = pd.read_csv('netflix_titles.csv')
+
+    # Classificar cada pel·lícula per tipus, títol, etc. i desar en textual_representation
+def create_textual_representation(row):
+    textual_representation = f"""Type: {row['type']}
+Title: {row['title']}
+Director: {row['director']}
+Cast: {row['cast']}
+Released: {row['release_year']}
+Genres: {row['listed_in']}
+Description: {row['description']}"""
+    
+    return textual_representation
+
+df['textual_representation'] = df.apply(create_textual_representation, axis=1)
+
+    #Importar llibreries...
+import faiss
+import requests
+import numpy as np
+
+    # Crear index de pel·lícules
+
+dim = 4096
+
+index = faiss.IndexFlatL2(dim)
+
+X = np.zeros((len(df['textual_representation']), dim), dtype='float32')
+for i, representation in enumerate(df['textual_representation']):
+    if i % 200:
+        print('Processed ', str(i), " instances")
+    res = requests.post('http://localhost:11434/api/embeddings',
+                        json ={
+                            'model': 'llama2',
+                            'prompt':  representation
+                        }
+                        )
+    
+    embedding = res.json()['embedding']
+
+    X[i] = np.array(embedding)
+
+index.add(X)
+
+faiss.write_index(index, 'index')
+index = faiss.read_index('index')
+
+# RECOMANAR PEL·LÍCULES
+
+    # Crear una representació textual de Cinema Paradiso (la millor peli del món)
+representation = """Type: Movie
+Title: Cinema Paradiso
+Director: Giuseppe Tornatore
+Cast: Philippe Noiret, Enzo Cannavale, Antonella Attili, Isa Danieli, Salvatore Cascio, Marco Leonardi, Jacques Perrin
+Released: 1988
+Genres: Drama, Romance
+Description: A famous filmmaker recalls his childhood in a small Sicilian village, where he developed his love for cinema under the guidance of the local theater’s projectionist."""
+
+    # Generar embedding de representation fent servir Ollama
+res = requests.post('http://localhost:11434/api/embeddings', json={
+    'model': 'llama2',
+    'prompt': representation
+})
+embedding = np.array(res.json()['embedding'], dtype='float32')
+
+embedding = embedding.reshape(1, -1) #TEST
+
+     # Trobar les 5 pel·licules més similars a representation (Cinema Paradiso) i mostrar-les al terminal
+D, I = index.search(embedding, 5) 
+
+best_matches = np.array(df['textual_representation'])[I.flatten()]
+for match in best_matches:
+    print('Següent pel·lícula: ')
+    print(match)
+    print()
