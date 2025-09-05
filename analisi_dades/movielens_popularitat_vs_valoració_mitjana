@@ -1,0 +1,22 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#.......................................
+#      Nº ratings vs mitjana rating
+#.......................................
+
+def plot_popularity_vs_rating(ratings):
+    movie_stats = ratings.groupby("movieId")["rating"].agg(["mean", "count"])
+
+    plt.figure(figsize=(10,6))
+    plt.scatter(movie_stats["count"], movie_stats["mean"], alpha=0.3)
+    plt.title("Popularity vs Average Rating")
+    plt.xlabel("Number of Ratings (popularity)")
+    plt.ylabel("Average Rating")
+    plt.xscale("log")  # ratings count is very skewed
+    plt.show()
+
+plot_popularity_vs_rating(ratings)
