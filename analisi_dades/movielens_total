@@ -1,0 +1,129 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#............................
+#      Gèneres Populars
+#............................
+def explode_genre_list(movies):
+    movies["genre_list"] = movies["genres"].str.split("|")
+    exploded = movies.explode("genre_list")
+    
+    genre_counts = exploded["genre_list"].value_counts()
+
+    return genre_counts
+def plot_genre_distribution(movies):
+
+    plt.figure(figsize=(12,6))
+    explode_genre_list(movies).plot(kind="bar")
+    plt.title("Number of Movies per Genre")
+    plt.xlabel("Genre")
+    plt.ylabel("Number of Movies")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+    
+plot_genre_distribution(movies)
+explode_genre_list(movies)
+
+#..........................................
+#      Popularitat general de gèneres
+#..........................................
+def genre_overall_popularity(movies, ratings, stars):
+    movie_genres = movies.set_index("movieId")["genres"].str.split("|").to_dict()
+    
+    genre_counts = {}
+    
+    for _, row in ratings.iterrows():
+        if row["rating"] >= stars:
+            genres = movie_genres.get(row["movieId"], [])
+            for g in genres:
+                genre_counts[g] = genre_counts.get(g, 0) + 1
+    
+    # Convert to Series and sort
+    popular_counts = pd.Series(genre_counts).sort_values(ascending=False)
+    return popular_counts
+
+def plot_genre_overall_popularity(movies, ratings, stars):
+    plt.figure(figsize=(12,6))
+    genre_overall_popularity(movies, ratings, stars).plot(kind="bar", color="skyblue", edgecolor="black")
+    plt.title("Popularitat de gèneres (nombre de valoracions ≥ 4 estrelles)")
+    plt.xlabel("Gènere")
+    plt.ylabel("Nombre de valoracions altes")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+
+    #NO L'HE POGUT FER ANAR :(((((( PROVAR AL PC
+
+plot_genre_overall_popularity(movies, ratings, 4)
+genre_overall_popularity(movies, ratings, 4)
+
+#......................................
+#      Mitjana de valoracions
+#......................................
+
+def plot_avg_rating_distribution(movies, ratings):
+    # Calculate average rating per movie
+    avg_ratings = ratings.groupby("movieId")["rating"].mean()
+
+    plt.figure(figsize=(10,6))
+    plt.hist(avg_ratings, bins=30, edgecolor="black")
+    plt.title("Distribution of Average Ratings per Movie")
+    plt.xlabel("Average Rating")
+    plt.ylabel("Number of Movies")
+    plt.show()
+
+plot_avg_rating_distribution(movies, ratings)
+ratings_distribution(movies, ratings)
+
+#......................................
+#      Distribució de valoracions
+#......................................
+
+def ratings_distribution(movies, ratings):
+    rating_counts = ratings.groupby("movieId").count().reset_index()
+    rating_counts.rename(columns={"rating": "num_ratings"}, inplace=True)
+
+    
+    result = movies[["movieId", "title"]].merge(rating_counts, on="movieId", how="left")
+    result["num_ratings"] = result["num_ratings"].fillna(0).astype(int)
+
+    result = result.sort_values("num_ratings", ascending=False)
+
+    return result.head(20)
+
+#......................................
+#      Biaix de popularitat
+#......................................
+
+def plot_num_ratings_distribution(ratings):
+    num_ratings = ratings.groupby("movieId")["rating"].count()
+
+    plt.figure(figsize=(10,6))
+    plt.hist(num_ratings, bins=50, edgecolor="black")
+    plt.title("Distribution of Number of Ratings per Movie")
+    plt.xlabel("Number of Ratings")
+    plt.ylabel("Number of Movies")
+    plt.yscale("log")
+    plt.show()
+plot_num_ratings_distribution(ratings)
+
+#.......................................
+#      Nº ratings vs mitjana rating
+#.......................................
+
+def plot_popularity_vs_rating(ratings):
+    movie_stats = ratings.groupby("movieId")["rating"].agg(["mean", "count"])
+
+    plt.figure(figsize=(10,6))
+    plt.scatter(movie_stats["count"], movie_stats["mean"], alpha=0.3)
+    plt.title("Popularity vs Average Rating")
+    plt.xlabel("Number of Ratings (popularity)")
+    plt.ylabel("Average Rating")
+    plt.xscale("log")  # ratings count is very skewed
+    plt.show()
+
+plot_popularity_vs_rating(ratings)
