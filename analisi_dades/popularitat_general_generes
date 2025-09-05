@@ -1,0 +1,38 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#..........................................
+#      Popularitat general de gèneres
+#..........................................
+def genre_overall_popularity(movies, ratings, stars):
+    movie_genres = movies.set_index("movieId")["genres"].str.split("|").to_dict()
+    
+    genre_counts = {}
+    
+    for _, row in ratings.iterrows():
+        if row["rating"] >= stars:
+            genres = movie_genres.get(row["movieId"], [])
+            for g in genres:
+                genre_counts[g] = genre_counts.get(g, 0) + 1
+    
+    # Convert to Series and sort
+    popular_counts = pd.Series(genre_counts).sort_values(ascending=False)
+    return popular_counts
+
+def plot_genre_overall_popularity(movies, ratings, stars):
+    plt.figure(figsize=(12,6))
+    genre_overall_popularity(movies, ratings, stars).plot(kind="bar", color="skyblue", edgecolor="black")
+    plt.title("Popularitat de gèneres (nombre de valoracions ≥ 4 estrelles)")
+    plt.xlabel("Gènere")
+    plt.ylabel("Nombre de valoracions altes")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+
+    #NO L'HE POGUT FER ANAR :(((((( PROVAR AL PC
+
+plot_genre_overall_popularity(movies, ratings, 4)
+genre_overall_popularity(movies, ratings, 4)
