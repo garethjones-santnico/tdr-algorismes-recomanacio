@@ -1,0 +1,23 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#......................................
+#      Mitjana de valoracions
+#......................................
+
+def plot_avg_rating_distribution(movies, ratings):
+    # Calculate average rating per movie
+    avg_ratings = ratings.groupby("movieId")["rating"].mean()
+
+    plt.figure(figsize=(10,6))
+    plt.hist(avg_ratings, bins=30, edgecolor="black")
+    plt.title("Distribution of Average Ratings per Movie")
+    plt.xlabel("Average Rating")
+    plt.ylabel("Number of Movies")
+    plt.show()
+
+plot_avg_rating_distribution(movies, ratings)
+ratings_distribution(movies, ratings)
