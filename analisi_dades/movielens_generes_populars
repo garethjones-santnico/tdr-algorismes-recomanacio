@@ -1,0 +1,30 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#............................
+#      Gèneres Populars
+#............................
+
+def explode_genre_list(movies):
+    movies["genre_list"] = movies["genres"].str.split("|")
+    exploded = movies.explode("genre_list")
+    
+    genre_counts = exploded["genre_list"].value_counts()
+
+    return genre_counts
+def plot_genre_distribution(movies):
+
+    plt.figure(figsize=(12,6))
+    explode_genre_list(movies).plot(kind="bar")
+    plt.title("Number of Movies per Genre")
+    plt.xlabel("Genre")
+    plt.ylabel("Number of Movies")
+    plt.xticks(rotation=45, ha="right")
+    plt.tight_layout()
+    plt.show()
+    
+plot_genre_distribution(movies)
+explode_genre_list(movies)
