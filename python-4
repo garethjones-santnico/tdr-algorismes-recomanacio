@@ -1,0 +1,196 @@
+#Aquest codi s'ha creat dins de Jupyter Notebook per poder crear un UI més fàcilment. Cada "break" que hi ha com a comentari és un nou cell a Jupyter Notebook.
+import pandas as pd
+
+movies = pd.read_csv("movies.csv")
+ratings = pd.read_csv("ratings.csv")
+
+#break
+
+import re
+
+def clean_title(title):
+    return re.sub("[^a-zA-Z0-9 ]", "", title)
+
+#break
+
+movies["clean_title"] = movies["title"].apply(clean_title)
+
+#break
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+vectorizer = TfidfVectorizer(ngram_range=(1,2))
+
+tfidf = vectorizer.fit_transform(movies["clean_title"])
+
+#break
+
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+def search(title):
+    title = clean_title(title)
+    query_vec = vectorizer.transform([title])
+    similarity = cosine_similarity(query_vec, tfidf).flatten()
+    indices = np.argpartition(similarity, -5)[-5:]
+    results = movies.iloc[indices][::-1]
+    return results
+
+#break
+
+movie_id = 1
+
+similar_users = ratings[(ratings["movieId"] == movie_id) & (ratings["rating"] > 4)]["userId"].unique()
+
+similar_user_recs = ratings[(ratings["userId"].isin(similar_users)) & (ratings["rating"] > 4)]["movieId"]
+
+similar_user_recs = similar_user_recs.value_counts() / len(similar_users) #to make percentage
+
+similar_user_recs = similar_user_recs[similar_user_recs > .1]
+
+#break
+
+all_users = ratings[(ratings["movieId"].isin(similar_user_recs.index)) & (ratings["rating"] > 4)] #All of the users that hve watched movies recommended to us
+
+all_user_recs = all_users["movieId"].value_counts() / len(all_users["userId"].unique())
+
+#break 
+
+rec_percentages = pd.concat([similar_user_recs, all_user_recs], axis=1)
+rec_percentages.columns = ["similar", "all"]
+rec_percentages["score"] = rec_percentages["similar"] / rec_percentages["all"]
+rec_percentages = rec_percentages.sort_values("score", ascending=False)
+
+#break
+
+def find_similar_movies_multiple(movie_ids):
+    user_ratings = ratings[(ratings["movieId"].isin(movie_ids)) & (ratings["rating"] > 4)]
+    
+    user_weights = user_ratings.groupby("userId").agg(
+        avg_rating=("rating", "mean"),
+        movies_rated=("movieId", "count")
+    )
+    user_weights["coverage"] = user_weights["movies_rated"] / len(movie_ids)
+    user_weights["weight"] = user_weights["avg_rating"] * user_weights["coverage"]
+
+    similar_user_recs = (
+        ratings[ratings["userId"].isin(user_weights.index)]
+        .groupby("movieId")["userId"]
+        .apply(lambda x: sum(user_weights.loc[x, "weight"]))
+    )
+
+    all_user_recs = (
+        ratings.groupby("movieId")["userId"].nunique() / ratings["userId"].nunique()
+    )
+
+    rec_percentages = pd.concat([similar_user_recs, all_user_recs], axis=1)
+    rec_percentages.columns = ["similar_weighted", "all"]
+    rec_percentages["score"] = rec_percentages["similar_weighted"] / rec_percentages["all"]
+    rec_percentages = rec_percentages.sort_values("score", ascending=False)
+
+    return rec_percentages.head(10).merge(movies, left_index=True, right_on="movieId")[["score", "title", "genres"]]
+
+#break
+
+import ipywidgets as widgets
+from IPython.display import display
+
+movie_inputs = [
+    widgets.Text(value='', description=f'Movie {i+1}:', disabled=False)
+    for i in range(4)
+]
+recommendation_list = widgets.Output()
+
+def on_change(change):
+    with recommendation_list:
+        recommendation_list.clear_output()
+        
+        # Collect movie_ids for all non-empty inputs
+        movie_ids = []
+        for box in movie_inputs:
+            title = box.value
+            if len(title) > 3:  # avoid very short matches
+                results = search(title)
+                movie_ids.append(results.iloc[0]["movieId"])
+        
+        # Only recommend if we have at least 1 movie
+        if movie_ids:
+            display(find_similar_movies_multiple(movie_ids))
+
+for box in movie_inputs:
+    box.observe(on_change, names='value')
+
+display(widgets.VBox(movie_inputs), recommendation_list)
+
+#break  
+
+def find_users_all_movies(movie_ids, min_rating):
+    filtered = ratings[(ratings["movieId"].isin(movie_ids)) & (ratings["rating"] >= min_rating)]
+    user_counts = filtered.groupby("userId")["movieId"].nunique()
+    
+    # Keep only users who rated ALL movies
+    users = user_counts[user_counts == len(movie_ids)].index
+    return set(users)
+
+def score_users_by_preference(movie_ids, users):
+    # Agafem només les valoracions d’aquests usuaris per aquestes pel·lícules
+    user_ratings = ratings[(ratings["userId"].isin(users)) & (ratings["movieId"].isin(movie_ids))]
+
+    # Calculem la mitjana de la nota que cada usuari ha posat a aquestes pel·lícules
+    user_mean_ratings = user_ratings.groupby("userId")["rating"].mean()
+
+    return user_mean_ratings
+
+def recommend_from_strong_fans(movie_ids, min_rating=0):
+    # 1. Trobem usuaris que han vist totes 4
+    users = find_users_all_movies(movie_ids, min_rating=min_rating)
+
+    if not users:
+        return pd.DataFrame(columns=["score", "title", "genres"])
+
+    # 2. Calculem el "pes" de cada usuari = mitjana nota
+    user_weights = score_users_by_preference(movie_ids, users)
+
+    # 3. Agafem les seves altres valoracions
+    other_ratings = ratings[(ratings["userId"].isin(users)) & (~ratings["movieId"].isin(movie_ids))]
+
+    # 4. Multipliquem la nota de cada usuari pel seu pes
+    other_ratings = other_ratings.merge(user_weights, left_on="userId", right_index=True, suffixes=("", "_user_mean"))
+    other_ratings["weighted_rating"] = other_ratings["rating"] * other_ratings["rating_user_mean"]
+
+    # 5. Agreguem per pel·lícula
+    movie_scores = other_ratings.groupby("movieId")["weighted_rating"].mean().sort_values(ascending=False)
+
+    # 6. Afegim metadades de pel·lícula
+    return movie_scores.head(10).reset_index().merge(movies, on="movieId")[["weighted_rating", "title", "genres"]]
+
+#break
+
+#intentat, però igualment inacabat
+
+movie_inputs = [
+    widgets.Text(value='', description=f'Movie {i+1}:', disabled=False)
+    for i in range(4)
+]
+recommendation_list = widgets.Output()
+
+def on_change(change):
+    with recommendation_list:
+        recommendation_list.clear_output()
+        
+        # Collect movie_ids for all non-empty inputs
+        movie_ids = []
+        for box in movie_inputs:
+            title = box.value
+            if len(title) > 3:  # avoid very short matches
+                results = search(title)
+                movie_ids.append(results.iloc[0]["movieId"])
+        
+        # Only recommend if we have at least 1 movie
+        if movie_ids:
+            display(recommend_from_strong_fans(movie_ids, 4))
+
+for box in movie_inputs:
+    box.observe(on_change, names='value')
+
+display(widgets.VBox(movie_inputs), recommendation_list)
