@@ -32,7 +32,5 @@ def plot_genre_overall_popularity(movies, ratings, stars):
     plt.tight_layout()
     plt.show()
 
-    #NO L'HE POGUT FER ANAR :(((((( PROVAR AL PC
-
 plot_genre_overall_popularity(movies, ratings, 4)
 genre_overall_popularity(movies, ratings, 4)
